@@ -3,6 +3,8 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cron = require("node-cron");
+var admin = require("firebase-admin");
+const fun = require("./templatefunctions/functions");
 
 //Routes
 const authRouter = require("./routes/auth");
@@ -10,10 +12,15 @@ const taskRouter = require("./routes/task");
 
 //models
 const Task = require("./models/task");
+const User = require("./models/user");
 //
 const app = express();
+var serviceAccount = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
 
 //INIT
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 app.use(express.json());
 mongoose
   .connect(process.env.MONGO_URL)
@@ -37,26 +44,84 @@ app.get("/", (req, res) => {
 cron.schedule("0 */12 * * *", async () => {
   const date = new Date();
   const tasks = await Task.find();
-  tasks.forEach(async (item, index) => {
+  const users = await User.find();
+  const fcmmap = users.map(({ _id, fcmtoken }) => {
+    return { [_id]: fcmtoken };
+  });
+  tasks.forEach(async (item, _) => {
     if (item.dueDate.getDate() - date.getDate() < 0) {
+      const message = {
+        notification: {
+          title: "Reminder",
+          body: "DeadLine Exceeded !!",
+        },
+        token: fcmmap[item._id],
+      };
+      fun.sendPushNotification(message);
       const task = await Task.findByIdAndUpdate(
         { _id: item._id },
-        { reminder: "DeadLine Exceeded !! " }
+        {
+          $set: {
+            reminder: "DeadLine Exceeded !! ",
+            priority: "High",
+          },
+        }
       );
     } else if (item.dueDate.getDate() - date.getDate() == 1) {
+      const message = {
+        notification: {
+          title: "Reminder",
+          body: "DeadLine Tommorow.",
+        },
+        token: fcmmap[item._id],
+      };
+      fun.sendPushNotification(message);
       const task = await Task.findByIdAndUpdate(
         { _id: item._id },
-        { reminder: "DeadLine Tommorow." }
+        {
+          $set: {
+            reminder: "DeadLine Tommorow. ",
+            priority: "High",
+          },
+        }
       );
     } else if (item.dueDate.getDate() - date.getDate() == 0) {
+      const message = {
+        notification: {
+          title: "Reminder",
+          body: "Today is the DeadLine !!",
+        },
+        token: fcmmap[item._id],
+      };
+      fun.sendPushNotification(message);
       const task = await Task.findByIdAndUpdate(
         { _id: item._id },
-        { reminder: "Today is the DeadLine !!" }
+        {
+          $set: {
+            reminder: "Today is the DeadLine !!",
+            priority: "High",
+          },
+        }
       );
-    } else if (item.dueDate.getDate() - date.getDate() <= 4) {
+    } else if (item.dueDate.getDate() - date.getDate() <= 3) {
       const task = await Task.findByIdAndUpdate(
         { _id: item._id },
-        { reminder: "Due Date Approaching." }
+        {
+          $set: {
+            reminder: "Due Date Approaching.",
+            priority: "Medium",
+          },
+        }
+      );
+    } else if (item.dueDate.getDate() - date.getDate() > 3) {
+      const task = await Task.findByIdAndUpdate(
+        { _id: item._id },
+        {
+          $set: {
+            reminder: "Due Date Approaching.",
+            priority: "Low",
+          },
+        }
       );
     }
   });

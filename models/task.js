@@ -13,6 +13,11 @@ const TaskSchema = new mongoose.Schema({
   tag: { type: String },
   comments: [{ type: String }],
   reminder: { type: String, default: "" },
+  priority: {
+    type: String,
+    enum : ["Low","High","Medium"],
+    default: "Low",
+  },
 });
 
 const Task = mongoose.model("Task", TaskSchema);

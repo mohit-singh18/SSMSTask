@@ -1,5 +1,6 @@
 const Task = require("../models/task");
 const User = require("../models/user");
+const fun = require('../templatefunctions/functions');
 
 module.exports = {
   //
@@ -10,11 +11,9 @@ module.exports = {
         title: req.body.title,
         description: req.body.description,
         dueDate: date,
-        members: req.body.members,
         taskStatus: req.body.taskStatus,
         tag: req.body.tag,
         comments: req.body.comments,
-        // dueDate: req.body.dueDate,
       });
       task = await task.save();
       res.status(200).json(task);
@@ -40,6 +39,19 @@ module.exports = {
       task.tag = req.body.tag;
       task.comments = req.body.comments;
       task = await task.save();
+      let fcmtokens = [];
+      for (let mem of req.body.members) {
+        const user = await User.findById({ _id: mem });
+        fcmtokens.push(user.fcmtoken);
+      }
+      const message = {
+        notification: {
+          title: "Task Updates",
+          body: `${req.body.title} Updated`,
+        },
+        token: fcmtokens,
+      };
+      fun.sendPushNotification(message);
       res.status(200).json(task);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -53,12 +65,19 @@ module.exports = {
         return res.status(400).json({ error: "Atleast One Member Required." });
       }
       task.members = req.body.members;
-      for (mem in req.body.members) {
-        const user = await User.findByIdAndUpdate(
-          { _id: mem },
-          { $push: { tasks: req.params["taskId"] } }
-        );
+      let fcmtokens = [];
+      for (let mem of req.body.members) {
+        const user = await User.findById({ _id: mem });
+        fcmtokens.push(user.fcmtoken);
       }
+      const message = {
+        notification: {
+          title: "Task Updates",
+          body: `${req.body.title} Task Assigned`,
+        },
+        token: fcmtokens,
+      };
+      fun.sendPushNotification(message);
       task = await task.save();
       res.status(200).json(task);
     } catch (e) {
@@ -67,8 +86,64 @@ module.exports = {
   },
   //
   taskList: async (req, res) => {
+    //query
+    const filters = req.query;
+    //
     try {
       const tasks = await Task.find();
+      if (Object.keys(filters).length != 0) {
+        const filteredtasks = tasks.filter((task) => {
+          let isValid = true;
+          if (filters["members"]) {
+            const members = filters["members"].split(" ");
+            for (let member of members) {
+              isValid = isValid && task["members"].includes(member);
+            }
+          }
+          for (key in filters) {
+            if (key == "members") continue;
+            isValid = isValid && task[key] == filters[key];
+          }
+          return isValid;
+        });
+        return res.status(200).json(filteredtasks);
+      }
+      res.status(200).json(tasks);
+    } catch (e) {
+      res.status(400).json(e);
+    }
+  },
+  //
+  userTaskList: async (req, res) => {
+    //query
+    const filters = req.query;
+    //
+
+    // paramerts
+    const userId = req.params["userId"];
+    //
+
+    try {
+      const tasks = await Task.find({ members: userId });
+
+      if (Object.keys(filters).length != 0) {
+        const filteredtasks = tasks.filter((task) => {
+          let isValid = true;
+          if (filters["members"]) {
+            const members = filters["members"].split(" ");
+            for (let member of members) {
+              isValid = isValid && task["members"].includes(member);
+            }
+          }
+          for (key in filters) {
+            if (key == "members") continue;
+            isValid = isValid && task[key] == filters[key];
+          }
+          return isValid;
+        });
+        return res.status(200).json(filteredtasks);
+      }
+
       res.status(200).json(tasks);
     } catch (e) {
       res.status(400).json(e);

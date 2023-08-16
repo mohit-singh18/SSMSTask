@@ -17,6 +17,7 @@ module.exports = {
         username: req.body.username,
         email: req.body.email,
         password: hashedPassword,
+        fcmtoken : req.body.fcmtoken
       });
       newUser = await newUser.save();
       res.status(201).json(newUser);
@@ -25,7 +26,9 @@ module.exports = {
     }
   },
   login: async (req, res) => {
+    fcmtoken = req.body.fcmtoken;
     try {
+      
       const existingUser = await User.findOne({ email: req.body.email });
       if (!existingUser) {
         return res
@@ -43,7 +46,7 @@ module.exports = {
         { id: existingUser._id },
         process.env.JWT_AUTH_KEY
       );
-      res.json({ token, ...existingUser._doc });
+      res.json({ token,fcmtoken, ...existingUser._doc });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
